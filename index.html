@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroScan AI | Pipeline d'Imagerie Médicale</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-cyan: #00f3ff;
+            --neon-purple: #bc13fe;
+            --glass-bg: rgba(15, 23, 42, 0.85);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617; /* Slate 950 */
+            color: #e2e8f0;
+            overflow-x: hidden;
+        }
+
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--neon-cyan); }
+
+        /* Animations & Effets Visuels */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Effet de scan (Ligne laser) */
+        @keyframes scan-move {
+            0% { top: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+        .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--neon-cyan);
+            box-shadow: 0 0 15px var(--neon-cyan);
+            animation: scan-move 2s linear infinite;
+            z-index: 20;
+            display: none;
+        }
+
+        /* Effet écran CRT (lignes fines) */
+        .crt-overlay {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%;
+            pointer-events: none;
+        }
+
+        /* Animation d'apparition des logs */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative selection:bg-cyan-500 selection:text-white">
+
+    <div class="fixed inset-0 z-0 opacity-20 pointer-events-none" style="background-image: radial-gradient(#334155 1px, transparent 1px); background-size: 20px 20px;"></div>
+
+    <header class="sticky top-0 z-50 glass-panel border-b border-slate-700">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-3">
+                <span class="material-symbols-outlined text-cyan-400 text-3xl">medical_services</span>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wider text-white">NEURO<span class="text-cyan-400">SCAN</span> AI</h1>
+                    <p class="text-xs text-slate-400 font-mono tracking-widest">DIAGNOSTIC PIPELINE V4.2</p>
+                </div>
+            </div>
+            <div class="hidden md:flex items-center space-x-6 text-sm font-mono text-slate-400">
+                <div class="flex items-center space-x-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>SYSTEM ONLINE</span>
+                </div>
+                <div>LATENCY: 12ms</div>
+                <div id="clock">00:00:00</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow z-10 max-w-7xl mx-auto w-full p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <div class="lg:col-span-3 flex flex-col gap-4">
+            <div class="glass-panel rounded-xl p-5 shadow-lg shadow-cyan-900/10">
+                <h2 class="text-slate-300 font-bold mb-4 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm">hub</span> PIPELINE STAGES
+                </h2>
+                <div class="space-y-0 relative">
+                    <div class="absolute left-3 top-2 bottom-2 w-0.5 bg-slate-700"></div>
+                    
+                    <div class="relative pl-8 py-3 group cursor-default transition-all duration-300 opacity-50" id="step-nav-1">
+                        <div class="absolute left-[9px] top-4 w-2 h-2 rounded-full bg-slate-500 ring-4 ring-slate-900 transition-colors"></div>
+                        <h3 class="text-sm font-bold text-white">INPUT DATA</h3>
+                        <p class="text-xs text-slate-400">Acquisition & Raw Scan</p>
+                    </div>
+                    <div class="relative pl-8 py-3 group cursor-default transition-all duration-300 opacity-50" id="step-nav-2">
+                        <div class="absolute left-[9px] top-4 w-2 h-2 rounded-full bg-slate-500 ring-4 ring-slate-900 transition-colors"></div>
+                        <h3 class="text-sm font-bold text-white">PRE-PROCESSING</h3>
+                        <p class="text-xs text-slate-400">Anonymization & Cleaning</p>
+                    </div>
+                    <div class="relative pl-8 py-3 group cursor-default transition-all duration-300 opacity-50" id="step-nav-3">
+                        <div class="absolute left-[9px] top-4 w-2 h-2 rounded-full bg-slate-500 ring-4 ring-slate-900 transition-colors"></div>
+                        <h3 class="text-sm font-bold text-white">AI ENGINE</h3>
+                        <p class="text-xs text-slate-400">CNN Feature Extraction</p>
+                    </div>
+                    <div class="relative pl-8 py-3 group cursor-default transition-all duration-300 opacity-50" id="step-nav-4">
+                        <div class="absolute left-[9px] top-4 w-2 h-2 rounded-full bg-slate-500 ring-4 ring-slate-900 transition-colors"></div>
+                        <h3 class="text-sm font-bold text-white">HUMAN VALIDATION</h3>
+                        <p class="text-xs text-slate-400">Expert Review Loop</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-5 flex-grow border-l-4 border-l-cyan-500">
+                <h3 class="text-cyan-400 font-mono text-xs uppercase mb-2">System Knowledge Base</h3>
+                <div class="text-sm text-slate-300 leading-relaxed" id="info-box-content">
+                    <p>Initialize a new diagnostic session to begin the pipeline.</p>
+                </div>
+                <div class="mt-4 pt-4 border-t border-slate-700 flex items-center gap-2 text-xs text-slate-500">
+                    <span class="material-symbols-outlined text-sm">info</span> Source: Verified Medical Protocols
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-6 flex flex-col gap-4">
+            <div class="relative w-full aspect-[4/3] bg-black rounded-xl border border-slate-700 overflow-hidden shadow-2xl shadow-cyan-900/20 group">
+                <div class="absolute inset-0 z-20 pointer-events-none crt-overlay"></div>
+                
+                <div class="absolute top-4 left-4 right-4 z-30 flex justify-between items-center text-xs font-mono">
+                    <div class="bg-black/50 backdrop-blur px-2 py-1 rounded text-cyan-400 border border-cyan-900">
+                        ID: <span id="viewport-id">---</span>
+                    </div>
+                    <div class="bg-black/50 backdrop-blur px-2 py-1 rounded text-emerald-400 border border-emerald-900 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-slate-500" id="viewport-status-dot"></span>
+                        <span id="viewport-status">STANDBY</span>
+                    </div>
+                </div>
+
+                <div class="absolute inset-0 flex items-center justify-center" id="view-stage-1">
+                    <div class="text-center">
+                        <span class="material-symbols-outlined text-6xl text-slate-700 mb-2">radiology</span>
+                        <p class="text-slate-500 font-mono text-sm">NO IMAGE DATA LOADED</p>
+                        <button class="mt-4 px-6 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded shadow-[0_0_15px_rgba(8,145,178,0.5)] transition-all flex items-center gap-2 mx-auto" onclick="startSimulation()">
+                            <span class="material-symbols-outlined">play_circle</span> INITIATE SCAN
+                        </button>
+                    </div>
+                </div>
+
+                <div class="absolute inset-0 hidden" id="view-content">
+                    <img id="main-scan-image" src="" alt="Medical Scan" class="w-full h-full object-cover filter grayscale contrast-125">
+                    
+                    <div id="pii-overlay" class="absolute top-10 left-10 p-4 bg-black/80 border border-red-500/30 text-red-400 font-mono text-xs rounded opacity-0 transition-opacity duration-300">
+                        <p class="font-bold">PATIENT DATA:</p>
+                        <p>NAME: John Doe</p>
+                        <p>DOB: 12/05/1978</p>
+                        <p>ID: #89220-AX</p>
+                    </div>
+
+                    <div class="scan-line" id="scan-laser"></div>
+
+                    <div class="absolute inset-0 z-10 opacity-0 transition-opacity duration-1000 bg-cyan-900/10 mix-blend-screen" id="neural-overlay">
+                        <div class="absolute w-24 h-24 rounded-full bg-gradient-to-r from-red-500 to-yellow-500 opacity-0 blur-xl mix-blend-color-dodge transition-all duration-1000" id="heatmap-spot" style="top: 40%; left: 55%;"></div>
+                        <svg class="w-full h-full absolute inset-0 pointer-events-none">
+                            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(0, 243, 255, 0.1)" stroke-width="1"/>
+                            </pattern>
+                            <rect width="100%" height="100%" fill="url(#grid)" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-4 flex justify-between items-center">
+                <div class="flex items-center gap-4">
+                    <button id="btn-prev" class="p-2 rounded-lg bg-slate-800 text-slate-500 cursor-not-allowed transition-all" disabled>
+                        <span class="material-symbols-outlined">arrow_back</span>
+                    </button>
+                    <div class="flex flex-col">
+                        <span class="text-xs text-slate-400 font-mono">CURRENT PHASE</span>
+                        <span class="text-sm font-bold text-white" id="control-phase-text">IDLE</span>
+                    </div>
+                </div>
+                <button id="btn-next" onclick="nextPhase()" class="px-6 py-2 rounded-lg bg-slate-800 text-slate-500 font-bold flex items-center gap-2 cursor-not-allowed transition-all" disabled>
+                    NEXT PHASE <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="lg:col-span-3 flex flex-col gap-4">
+            <div class="glass-panel rounded-xl flex-grow overflow-hidden flex flex-col max-h-[400px]">
+                <div class="p-3 bg-slate-900/50 border-b border-slate-700 flex justify-between items-center">
+                    <span class="text-xs font-mono text-cyan-500">SYSTEM_LOGS.log</span>
+                    <span class="w-2 h-2 rounded-full bg-cyan-500 animate-ping"></span>
+                </div>
+                <div class="p-4 font-mono text-xs space-y-2 overflow-y-auto flex-grow text-slate-400 bg-black/40" id="system-log">
+                    <div class="text-slate-600">Waiting for input...</div>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-4 border-t-4 border-t-purple-500">
+                <h3 class="text-xs font-bold text-slate-300 uppercase mb-3">Model Confidence</h3>
+                <div class="relative h-4 bg-slate-800 rounded-full overflow-hidden">
+                    <div class="absolute top-0 left-0 h-full bg-gradient-to-r from-cyan-500 to-purple-600 w-0 transition-all duration-1000 ease-out" id="confidence-bar"></div>
+                </div>
+                <div class="flex justify-between mt-2 text-xs font-mono">
+                    <span class="text-slate-500">Baseline: 0%</span>
+                    <span class="text-white font-bold" id="confidence-text">0.0%</span>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-xl p-4 opacity-50 pointer-events-none transition-opacity" id="citation-box">
+                <h4 class="text-xs font-bold text-white mb-1">Learn More</h4>
+                <a href="#" target="_blank" class="text-xs text-cyan-400 hover:text-cyan-300 underline truncate block" id="citation-link">Select a phase for sources</a>
+            </div>
+        </div>
+    </main>
+
+    <footer class="glass-panel border-t border-slate-700 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 py-6 text-center">
+            <p class="text-slate-400 text-sm mb-2">This website is made to understand how AI is used in X-ray medical imagery.</p>
+            <p class="text-slate-600 text-xs font-mono">Créé par Benoît DOUBLE et Hugo BERTAGNA</p>
+        </div>
+    </footer>
+
+    <div id="result-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm hidden opacity-0 transition-opacity duration-300">
+        <div id="result-modal-content" class="glass-panel max-w-lg w-full p-8 rounded-2xl border border-emerald-500/30 shadow-[0_0_50px_rgba(16,185,129,0.2)] transform scale-95 transition-transform duration-300">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-emerald-900/50 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-500">
+                    <span class="material-symbols-outlined text-3xl text-emerald-400">check_circle</span>
+                </div>
+                <h2 class="text-2xl font-bold text-white">Diagnosis Verified</h2>
+                <p class="text-emerald-400 font-mono text-sm mt-1">HUMAN-IN-THE-LOOP COMPLETE</p>
+            </div>
+            <div id="report-content" class="space-y-4 text-sm text-slate-300 bg-slate-900/50 p-6 rounded-lg border border-slate-700">
+                <div class="flex justify-between border-b border-slate-700 pb-2">
+                    <span>Patient ID:</span> <span class="font-mono text-white">ANON-9921</span>
+                </div>
+                <div class="flex justify-between border-b border-slate-700 pb-2">
+                    <span>AI Detection:</span> <span class="font-bold text-purple-400">Nodule (R. Upper Lobe)</span>
+                </div>
+                <div class="flex justify-between border-b border-slate-700 pb-2">
+                    <span>Confidence:</span> <span class="font-mono text-cyan-400">98.4%</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Radiologist Action:</span> <span class="text-emerald-400 font-bold">CONFIRMED</span>
+                </div>
+            </div>
+            <div class="mt-6 grid grid-cols-2 gap-4">
+                <button onclick="downloadReport()" class="py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined">description</span> TXT REPORT
+                </button>
+                <button onclick="resetSimulation()" class="py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined">restart_alt</span> NEW CASE
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration & State ---
+        const phases = [
+            { id: 1, title: 'INPUT', desc: 'Patient Scan Acquisition', color: 'slate' },
+            { id: 2, title: 'PRE-PROCESS', desc: 'Anonymization (HIPAA)', color: 'blue' },
+            { id: 3, title: 'AI ENGINE', desc: 'CNN Feature Extraction', color: 'purple' },
+            { id: 4, title: 'VALIDATION', desc: 'Radiologist Review', color: 'emerald' }
+        ];
+        let currentPhase = 0;
+        let systemLogsText = [];
+        
+        // Use a placeholder image or a generated one
+        // Note: In a real environment, this URL comes from a backend service.
+        const brainScanUrl = "https://images.unsplash.com/photo-1559757175-5700dde675bc?q=80&w=2000&auto=format&fit=crop&ixlib=rb-4.0.3"; 
+
+        // --- DOM Elements Reference ---
+        const els = {
+            viewStage1: document.getElementById('view-stage-1'),
+            viewContent: document.getElementById('view-content'),
+            mainImg: document.getElementById('main-scan-image'),
+            piiOverlay: document.getElementById('pii-overlay'),
+            scanLaser: document.getElementById('scan-laser'),
+            neuralOverlay: document.getElementById('neural-overlay'),
+            heatmap: document.getElementById('heatmap-spot'),
+            log: document.getElementById('system-log'),
+            btnNext: document.getElementById('btn-next'),
+            btnPrev: document.getElementById('btn-prev'),
+            phaseText: document.getElementById('control-phase-text'),
+            confidenceBar: document.getElementById('confidence-bar'),
+            confidenceText: document.getElementById('confidence-text'),
+            infoContent: document.getElementById('info-box-content'),
+            citationBox: document.getElementById('citation-box'),
+            citationLink: document.getElementById('citation-link'),
+            viewportId: document.getElementById('viewport-id'),
+            viewportStatus: document.getElementById('viewport-status'),
+            viewportDot: document.getElementById('viewport-status-dot'),
+            navSteps: [1, 2, 3, 4].map(i => document.getElementById(`step-nav-${i}`)),
+            resultModal: document.getElementById('result-modal'),
+            resultModalContent: document.getElementById('result-modal-content')
+        };
+
+        // --- Clock Logic ---
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').innerText = now.toLocaleTimeString('en-US', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // --- Logging System ---
+        function log(msg, type = 'info') {
+            const time = new Date().toLocaleTimeString('en-US', {hour12: false, hour: '2-digit', minute: '2-digit', second:'2-digit'});
+            const logEntry = `[${time}] ${msg}`;
+            systemLogsText.push(logEntry);
+
+            const div = document.createElement('div');
+            // Conditional styling based on log type
+            const colorClass = type === 'error' ? 'border-red-500 text-red-400' : 
+                               type === 'success' ? 'border-emerald-500 text-emerald-400' : 
+                               'border-cyan-500 text-slate-300';
+            
+            div.className = `font-mono text-xs border-l-2 pl-2 mb-1 animate-fadeIn ${colorClass}`;
+            div.innerHTML = `<span class="opacity-50">[${time}]</span> ${msg}`;
+            els.log.appendChild(div);
+            els.log.scrollTop = els.log.scrollHeight;
+        }
+
+        // --- Main Simulation Start ---
+        async function startSimulation() {
+            log("Initializing Diagnostic Core...");
+            systemLogsText = [];
+            els.viewStage1.style.display = 'none';
+            els.viewContent.style.display = 'block';
+            
+            // Set Image
+            els.mainImg.src = brainScanUrl;
+            
+            // Simulate Loading State
+            els.viewportStatus.innerText = "LOADING DATA...";
+            els.viewportDot.className = "w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse";
+            
+            // Wait for visual effect
+            await new Promise(r => setTimeout(r, 1000));
+            
+            // Image load handler
+            if(els.mainImg.complete) {
+                log("Data Loaded: DICOM Series #89220-AX");
+                setPhase(1);
+            } else {
+                els.mainImg.onload = () => {
+                    log("Data Loaded: DICOM Series #89220-AX");
+                    setPhase(1);
+                };
+            }
+        }
+
+        // --- Phase Management ---
+        function setPhase(phaseIdx) {
+            currentPhase = phaseIdx;
+            
+            // Update Navigation UI Sidebar
+            els.navSteps.forEach((el, idx) => {
+                if (idx + 1 === phaseIdx) {
+                    // Current Phase
+                    el.classList.remove('opacity-50');
+                    el.classList.add('opacity-100');
+                    el.querySelector('div').classList.remove('bg-slate-500');
+                    el.querySelector('div').classList.add('bg-cyan-400', 'shadow-[0_0_10px_#22d3ee]');
+                } else if (idx + 1 < phaseIdx) {
+                    // Completed Phase
+                    el.classList.add('opacity-50');
+                    el.querySelector('div').classList.add('bg-emerald-500'); 
+                } else {
+                    // Future Phase
+                    el.classList.add('opacity-50');
+                    el.querySelector('div').classList.remove('bg-cyan-400', 'shadow-[0_0_10px_#22d3ee]');
+                    el.querySelector('div').classList.add('bg-slate-500');
+                }
+            });
+
+            // Update Header Text
+            els.phaseText.innerText = phases[phaseIdx-1].title;
+            
+            // Execute Logic for the specific phase
+            handlePhaseLogic(phaseIdx);
+        }
+
+        function nextPhase() {
+            if (currentPhase < 4) {
+                setPhase(currentPhase + 1);
+            } else {
+                showFinalResult();
+            }
+        }
+
+        function handlePhaseLogic(phase) {
+            // Reset Button State
+            els.btnNext.disabled = true;
+            els.btnNext.classList.add('cursor-not-allowed', 'bg-slate-800');
+            els.btnNext.classList.remove('bg-cyan-600', 'hover:bg-cyan-500');
+
+            switch(phase) {
+                case 1: // INPUT
+                    els.viewportId.innerText = "RAW-DATA";
+                    els.viewportStatus.innerText = "ACQUIRING";
+                    els.viewportDot.className = "w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse";
+                    els.scanLaser.style.display = 'block';
+                    els.piiOverlay.style.opacity = '1';
+                    
+                    els.infoContent.innerHTML = `
+                        <p class="mb-2"><strong class="text-white">Data Acquisition:</strong> The scanner captures raw slice data stored in <strong>DICOM</strong> format.</p>
+                        <ul class="list-disc list-inside text-xs text-slate-400 space-y-1">
+                            <li>Format: DICOM (Digital Imaging and Communications in Medicine)</li>
+                            <li>Metadata: Contains PII (Patient Identifiable Information)</li>
+                            <li>Risk: Privacy violation if unencrypted.</li>
+                        </ul>
+                    `;
+                    els.citationBox.style.opacity = '1';
+                    els.citationLink.href = "https://www.rsna.org/research/imaging-research-tools";
+                    els.citationLink.innerText = "Source: RSNA Imaging Tools";
+
+                    log("Starting X-Ray scan sequence...");
+                    setTimeout(() => log("Slice 1/14 captured."), 500);
+                    setTimeout(() => log("Slice 2/14 captured."), 800);
+                    setTimeout(() => log("Slice 3/14 captured."), 1100);
+                    setTimeout(() => enableNext(), 2000);
+                    break;
+
+                case 2: // PRE-PROCESSING
+                    els.scanLaser.style.display = 'none';
+                    els.viewportStatus.innerText = "ANONYMIZING";
+                    els.viewportDot.className = "w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse";
+                    
+                    els.infoContent.innerHTML = `
+                        <p class="mb-2"><strong class="text-white">Anonymization:</strong> Before AI processing, all PII must be stripped or hashed to comply with HIPAA/GDPR.</p>
+                        <p class="mb-2">This process removes tags like <code>(0010,0010) PatientName</code> from the file header.</p>
+                    `;
+                    els.citationLink.href = "#";
+                    els.citationLink.innerText = "Source: SIIM Anonymization Standards";
+
+                    log("Initiating De-identification protocol...");
+                    
+                    // Visual effect: blur and hide PII
+                    setTimeout(() => {
+                        els.piiOverlay.style.transition = "filter 1s, opacity 1s";
+                        els.piiOverlay.style.filter = "blur(10px)";
+                        log("Hashing PatientID...");
+                    }, 800);
+                    
+                    setTimeout(() => {
+                        els.piiOverlay.style.opacity = '0';
+                        els.viewportId.innerText = "ANON-9921"; 
+                        log("Metadata tags stripped. File is now HIPAA compliant.");
+                        enableNext();
+                    }, 2000);
+                    break;
+
+                case 3: // AI ENGINE
+                    els.viewportStatus.innerText = "INFERENCE RUNNING";
+                    els.viewportDot.className = "w-1.5 h-1.5 rounded-full bg-pink-500 animate-ping";
+                    els.neuralOverlay.style.opacity = '1';
+                    
+                    els.infoContent.innerHTML = `
+                        <p class="mb-2"><strong class="text-white">Convolutional Neural Network (CNN):</strong> The core AI engine. It uses filters to detect edges, shapes, and complex features.</p>
+                        <ul class="list-disc list-inside text-xs text-slate-400 space-y-1">
+                            <li>Layer 1: Edge Detection</li>
+                            <li>Layer 2: Texture Analysis</li>
+                            <li>Layer N: Tumor Classification</li>
+                        </ul>
+                    `;
+                    els.citationLink.href = "#";
+                    els.citationLink.innerText = "Source: CNNs in Medical Image Analysis";
+
+                    runAISimulation();
+                    break;
+
+                case 4: // HUMAN VALIDATION
+                    els.viewportStatus.innerText = "WAITING FOR REVIEW";
+                    els.viewportDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500";
+                    els.heatmap.style.opacity = '0.6';
+                    
+                    els.infoContent.innerHTML = `
+                        <p class="mb-2"><strong class="text-white">Human-in-the-Loop:</strong> AI is a support tool, not a replacement. The Radiologist must validate the finding.</p>
+                        <p class="text-emerald-400 font-bold mt-2">Action Required: Confirm or Reject Diagnosis.</p>
+                    `;
+                    els.citationLink.href = "#";
+                    els.citationLink.innerText = "Source: Physician-in-the-Loop Workflow";
+
+                    els.btnNext.innerHTML = `CONFIRM DX <span class="material-symbols-outlined">check</span>`;
+                    els.btnNext.classList.remove('bg-slate-800', 'text-slate-500', 'cursor-not-allowed');
+                    els.btnNext.classList.add('bg-emerald-600', 'hover:bg-emerald-500', 'text-white');
+                    els.btnNext.disabled = false;
+                    
+                    log("Report generated. Probability: 98.4%. Pending Physician Review.");
+                    break;
+            }
+        }
+
+        function runAISimulation() {
+            const steps = [
+                { msg: "Loading Model: ResNet-50-Medical...", time: 500 },
+                { msg: "Normalizing pixel intensity...", time: 1000 },
+                { msg: "Layer 1: Convolution (3x3 Kernel) - Edges Detected", time: 1800 },
+                { msg: "Layer 2: Max Pooling (2x2) - Downsampling", time: 2600 },
+                { msg: "Layer 12: Feature Map Activation", time: 3400 },
+                { msg: "Fully Connected Layer: Classification", time: 4200 },
+                { msg: "Anomaly Detected at [x:45, y:60]", time: 4800, type: 'success' }
+            ];
+
+            steps.forEach(step => {
+                setTimeout(() => {
+                    log(step.msg, step.type || 'info');
+                    if(step.msg.includes("Layer 1")) els.mainImg.style.filter = "contrast(150%) brightness(120%)";
+                    if(step.msg.includes("Activation")) {
+                         els.heatmap.style.opacity = '0.4';
+                         els.heatmap.style.transform = "scale(0.8)";
+                    }
+                    if(step.msg.includes("Anomaly")) {
+                        els.heatmap.style.opacity = '0.8';
+                        els.heatmap.style.transform = "scale(1)";
+                        els.confidenceBar.style.width = "98%";
+                        els.confidenceText.innerText = "98.4%";
+                    }
+                }, step.time);
+            });
+
+            setTimeout(() => {
+                enableNext();
+            }, 5500);
+        }
+
+        function enableNext() {
+            els.btnNext.disabled = false;
+            els.btnNext.classList.remove('cursor-not-allowed', 'bg-slate-800', 'text-slate-500');
+            els.btnNext.classList.add('bg-cyan-600', 'hover:bg-cyan-500', 'text-white', 'shadow-lg', 'shadow-cyan-900/50');
+            log("Phase complete. Proceed to next stage.", 'success');
+        }
+
+        function showFinalResult() {
+            els.resultModal.classList.remove('hidden');
+            void els.resultModal.offsetWidth; // Force reflow
+            els.resultModal.classList.remove('opacity-0');
+            els.resultModalContent.classList.remove('scale-95');
+            log("Process Complete. Diagnosis Logged.");
+        }
+
+        function resetSimulation() {
+            location.reload();
+        }
+
+        // --- Generate Text Report (TXT) ---
+        function downloadReport() {
+            const date = new Date().toLocaleString();
+            let content = `NEUROSCAN AI DIAGNOSTIC REPORT\n`;
+            content += `Generated: ${date}\n`;
+            content += `--------------------------------\n\n`;
+            content += `PATIENT ID: ANON-9921\n`;
+            content += `FINDING: Nodule (Right Upper Lobe)\n`;
+            content += `CONFIDENCE: 98.4%\n`;
+            content += `RADIOLOGIST STATUS: CONFIRMED\n\n`;
+            content += `--- SYSTEM LOGS ---\n`;
+            
+            systemLogsText.forEach(line => {
+                content += `${line}\n`;
+            });
+
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Medical_Report_ANON-9921.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
